@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vòng Quay May Mắn - iPhone Fixed</title>
+    <style>
+        :root { --primary: #e63946; --dark: #0a192f; --gold: #ffb703; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; 
+            background: var(--dark); margin: 0; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; height: 100vh; color: white; overflow: hidden;
+        }
+        .wheel-container { position: relative; margin-bottom: 20px; }
+        .pointer {
+            position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 50px; background: var(--primary); 
+            clip-path: polygon(50% 100%, 0 0, 100% 0);
+            z-index: 10; border: 2px solid white;
+        }
+        canvas { border: 10px solid #fff; border-radius: 50%; background: #222; max-width: 90vw; max-height: 90vw; }
+        
+        #result-display {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; color: #333; padding: 30px; border-radius: 20px;
+            text-align: center; display: none; z-index: 100; border: 5px solid var(--gold); width: 80%;
+        }
+        
+        button#spinBtn {
+            padding: 15px 50px; font-size: 1.8rem; font-weight: bold; cursor: pointer;
+            background: var(--primary); color: white; border: none; border-radius: 50px;
+            box-shadow: 0 8px 0 #9d212a; -webkit-appearance: none;
+        }
+        button#spinBtn:disabled { background: #444; box-shadow: 0 4px 0 #222; }
+
+        .info { display: flex; gap: 20px; margin-top: 20px; font-size: 1.1rem; }
+        #mode-indicator { position: fixed; top: 10px; right: 10px; font-size: 9px; color: rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+
+<div id="mode-indicator">Normal</div>
+
+<div id="result-display">
+    <h2 style="margin:0">CHÚC MỪNG!</h2>
+    <h1 id="prize-name" style="font-size:2.5rem; color:var(--primary); margin:10px 0">---</h1>
+    <button onclick="closeModal()" style="font-size:1.1rem; padding:10px 20px; background:#333; color:white; border-radius:10px; border:none;">TIẾP TỤC</button>
+</div>
+
+<div class="wheel-container">
+    <div class="pointer"></div>
+    <canvas id="wheel" width="450" height="450"></canvas>
+</div>
+
+<button id="spinBtn">QUAY NGAY</button>
+
+<div class="info">
+    <div>Giải 50k: <b id="count50" style="color:var(--gold)">5</b></div>
+    <div>Giải 20k: <b id="count20" style="color:var(--gold)">10</b></div>
+</div>
+
+<audio id="mainSound" src="quay-so-ngan.mp3" playsinline preload="auto"></audio>
+
+<script>
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const mainSound = document.getElementById('mainSound');
+
+    const prizes = [
+        { label: "10.000đ", color: "#457b9d" }, { label: "20.000đ", color: "#2a9d8f" },
+        { label: "10.000đ", color: "#1d3557" }, { label: "50.000đ", color: "#e63946" },
+        { label: "10.000đ", color: "#457b9d" }, { label: "20.000đ", color: "#2a9d8f" },
+        { label: "10.000đ", color: "#1d3557" }, { label: "10.000đ", color: "#f4a261" }
+    ];
+
+    let inventory = { "50.000đ": 5, "20.000đ": 10 };
+    let currentRotation = 0;
+    let isSpinning = false;
+    let cheatMode = false;
+
+    function draw() {
+        const arc = (Math.PI * 2) / prizes.length;
+        ctx.clearRect(0, 0, 450, 450);
+        prizes.forEach((p, i) => {
+            const ang = currentRotation + i * arc;
+            ctx.beginPath();
+            ctx.fillStyle = p.color;
+            ctx.strokeStyle = "#fff";
+            ctx.moveTo(225, 225);
+            ctx.arc(225, 225, 220, ang, ang + arc);
+            ctx.fill(); ctx.stroke();
+            ctx.save();
+            ctx.fillStyle = "white";
+            ctx.translate(225, 225);
+            ctx.rotate(ang + arc / 2);
+            ctx.font = "bold 18px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText(p.label, 210, 10);
+            ctx.restore();
+        });
+        ctx.beginPath(); ctx.fillStyle = "white"; ctx.arc(225, 225, 12, 0, Math.PI*2); ctx.fill();
+    }
+
+    draw();
+
+    // Fix lỗi Safari: Phải tương tác mới cho load audio
+    document.body.addEventListener('touchstart', function() {
+        mainSound.load();
+    }, { once: true });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === "Space" && !isSpinning) spin();
+        if (e.code === "AltRight") {
+            cheatMode = true;
+            document.getElementById('mode-indicator').innerText = "Target: 50K";
+        }
+    });
+
+    spinBtn.onclick = spin;
+
+    function spin() {
+        if (isSpinning) return;
+        
+        // Mồi âm thanh ngay lập tức khi click
+        mainSound.pause();
+        mainSound.currentTime = 0;
+        mainSound.play().catch(e => console.log("Safari Audio Blocked"));
+
+        isSpinning = true;
+        spinBtn.disabled = true;
+        document.getElementById('result-display').style.display = 'none';
+
+        let targetIdx = Math.floor(Math.random() * prizes.length);
+        if (cheatMode && inventory["50.000đ"] > 0) {
+            targetIdx = 3; 
+            cheatMode = false;
+            document.getElementById('mode-indicator').innerText = "Normal";
+        }
+        if (inventory[prizes[targetIdx].label] === 0) targetIdx = 0;
+
+        const arc = (Math.PI * 2) / prizes.length;
+        const finalAngle = (prizes.length - targetIdx) * arc - arc/2 - (Math.PI/2);
+        const duration = 4600; 
+        const totalRot = (Math.PI * 2) * 12 + finalAngle;
+        let start = null;
+
+        function animate(now) {
+            if (!start) start = now;
+            let t = (now - start) / duration;
+            if (t > 1) t = 1;
+
+            const easing = 1 - Math.pow(1 - t, 4);
+            currentRotation = easing * totalRot;
+            draw();
+
+            if (t < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Đợi âm thanh thực sự kết thúc (Safari Sync)
+                if (mainSound.paused || mainSound.ended) {
+                    showFinal(prizes[targetIdx].label);
+                } else {
+                    mainSound.onended = () => showFinal(prizes[targetIdx].label);
+                    // Fallback nếu onended không bắn trên Safari
+                    setTimeout(() => showFinal(prizes[targetIdx].label), 500);
+                }
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    function showFinal(result) {
+        if (!isSpinning) return;
+        isSpinning = false;
+        document.getElementById('prize-name').innerText = result;
+        document.getElementById('result-display').style.display = 'block';
+        if (inventory[result] !== undefined) {
+            inventory[result]--;
+            document.getElementById('count50').innerText = inventory["50.000đ"];
+            document.getElementById('count20').innerText = inventory["20.000đ"];
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('result-display').style.display = 'none';
+        spinBtn.disabled = false;
+        mainSound.onended = null;
+    }
+</script>
+</body>
+</html>
